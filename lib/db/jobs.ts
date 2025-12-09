@@ -29,7 +29,8 @@ export async function getFilteredJobs(companyId: string, filters: any) {
         
         return jobs.map(job => ({
             ...job,
-            id: job._id.toString()
+            id: job._id.toString(),
+            description: job.description ?? null
         }));
     } catch (error) {
         console.error("Error in getFilteredJobs:", error);
