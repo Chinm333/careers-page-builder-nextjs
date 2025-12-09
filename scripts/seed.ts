@@ -4,7 +4,7 @@ import Company from "../lib/models/Company";
 import Job from "../lib/models/Job";
 import path from "path";
 import Papa from "papaparse";
-import * as XLSX from "xlsx/xlsx.mjs";
+import * as XLSX from "xlsx";
 import fs from "fs";
 import mongoose from "mongoose";
 
@@ -53,7 +53,8 @@ async function main() {
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
         rows = XLSX.utils.sheet_to_json(sheet);
       } catch (err) {
-        console.error(`XLSX.readFile failed: ${err.message}`);
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        console.error(`XLSX.readFile failed: ${errorMessage}`);
         // Read raw buffer and let xlsx parse it (works better on Windows)
         const buffer = fs.readFileSync(file);
         const workbook = XLSX.read(buffer, { type: "buffer" });
@@ -100,12 +101,12 @@ async function main() {
 
     // Insert jobs in chunks
     const chunkSize = 50;
-    const jobIds = [];
+    const jobIds: mongoose.Types.ObjectId[] = [];
     
     for (let i = 0; i < cleaned.length; i += chunkSize) {
       const chunk = cleaned.slice(i, i + chunkSize);
       const jobs = await Job.insertMany(chunk);
-      jobIds.push(...jobs.map(j => j._id));
+      jobIds.push(...jobs.map(j => j._id as unknown as mongoose.Types.ObjectId));
       console.log(`Inserted ${Math.min(i + chunkSize, cleaned.length)}/${cleaned.length}`);
     }
 
@@ -114,10 +115,14 @@ async function main() {
     await company.save();
 
     console.log("Seed completed successfully!");
-  } catch (error: any) {
-    console.error("Error during seed operation:", error.message);
-    console.error(error.stack);
-    if (error.message.includes("connection") || error.message.includes("DATABASE_URL")) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    console.error("Error during seed operation:", errorMessage);
+    if (errorStack) {
+      console.error(errorStack);
+    }
+    if (errorMessage.includes("connection") || errorMessage.includes("DATABASE_URL")) {
       console.error("Please check your DATABASE_URL in .env file");
       console.error("MongoDB connection string format: mongodb+srv://user:password@cluster.mongodb.net/database");
       const dbUrl = process.env.DATABASE_URL || "NOT SET";
