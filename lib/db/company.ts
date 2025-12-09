@@ -1,26 +1,25 @@
 import connectDB from "@/lib/db";
 import Company from "@/lib/models/Company";
 import Section from "@/lib/models/Section";
+import mongoose from "mongoose";
 
 export async function getCompanyConfig(slug: string) {
     try {
         await connectDB();
         const company = await Company.findOne({ slug }).lean();
-        
+
         if (!company) return null;
-        
-        // Fetch sections separately to avoid populate issues with lean()
+
         const sectionIds = company.sections || [];
         const sections = await Section.find({ _id: { $in: sectionIds } })
             .sort({ order: 1 })
             .lean();
-        
-        // Format sections to include id field
+
         const formattedSections = sections.map((section: any) => ({
             ...section,
             id: section._id.toString()
         }));
-        
+
         return {
             ...company,
             id: company._id.toString(),
@@ -35,13 +34,11 @@ export async function getCompanyConfig(slug: string) {
 export async function updateCompanyBrand(slug: string, data: any) {
     try {
         await connectDB();
-        
-        // Normalize brand color to always have # prefix
         let brandColor = data.brandColor || "#2563eb";
         if (brandColor && !brandColor.startsWith("#")) {
             brandColor = "#" + brandColor;
         }
-        
+
         const company = await Company.findOneAndUpdate(
             { slug },
             {
@@ -53,11 +50,11 @@ export async function updateCompanyBrand(slug: string, data: any) {
             },
             { new: true }
         );
-        
+
         if (!company) {
             throw new Error("Company not found!");
         }
-        
+
         return company;
     } catch (error) {
         console.error("Error in updateCompanyBrand:", error);
@@ -72,17 +69,13 @@ export async function replaceCompanySections(slug: string, sections: any[]) {
         if (!company) {
             throw new Error("Company not found!");
         }
-
-        // Delete existing sections
         await Section.deleteMany({ companyId: company._id });
-        
+
         if (!sections.length) {
             company.sections = [];
             await company.save();
             return;
         }
-
-        // Create new sections
         const sectionDocs = sections.map((s) => ({
             companyId: company._id,
             type: s.type,
@@ -90,11 +83,9 @@ export async function replaceCompanySections(slug: string, sections: any[]) {
             content: s.content,
             order: s.order
         }));
-        
+
         const createdSections = await Section.insertMany(sectionDocs);
-        
-        // Update company with new section IDs
-        company.sections = createdSections.map(s => s._id);
+        company.sections = createdSections.map(s => s._id as unknown as mongoose.Types.ObjectId);
         await company.save();
     } catch (error) {
         console.error("Error in replaceCompanySections:", error);
